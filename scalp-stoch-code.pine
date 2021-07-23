@@ -1,0 +1,73 @@
+//@version=4
+strategy(title = "stoSCALPtico", overlay=true, currency=currency.USD, default_qty_type=strategy.cash, initial_capital=1000, default_qty_value=1000, 
+         commission_type = strategy.commission.percent, commission_value = 0.0036)
+
+
+// MEDIAS MOVILES//
+lenHMA = input(minval=1, title="Length HMA", defval=100)
+hullma = wma(2*wma(close, lenHMA/2)-wma(close, lenHMA), floor(sqrt(lenHMA)))
+plot(hullma, color=color.blue, style=plot.style_circles, transp=60)
+
+lenEma = input(minval=1, title="Length EMA", defval=120)
+ema1 = ema(close, lenEma)
+
+emaUtr= ema1 > ema1[3] and ema1[3] > ema1[6] and ema1[6] > ema1[10]
+emaDtr= ema1 < ema1[3] and ema1[3] < ema1[6] and ema1[6] < ema1[10]
+plot(ema1,"EMA", color = emaUtr ? #43ffea : emaDtr ?  #f44336 : #b2b5be , linewidth=2)
+
+//STOCHASTIC
+stoNSV= input(title="Nivel sobreventa estocastico", defval=20)
+stoNSC= input(title="Nivel sobrecompra estocastico", defval=80)
+periodK = input(14, title="K", minval=1)
+periodD = input(2, title="D", minval=1)
+smoothK = input(4, title="Smooth", minval=1)
+sto1 = sma(stoch(close, high, low, periodK), smoothK)
+sto2 = sma(sto1, periodD)
+//dr1 = security(syminfo.tickerid, resD, d)
+//plot(k, title="%K", color=#0094FF)
+//plot(dsto, title="%D", color=#FF6A00, transp=100)
+
+//ATR
+Periods = input(title="ATR Period", type=input.integer, defval=1)
+srcTr = input(close, title="ATR Source")
+Multiplier = input(title="ATR Multiplier", type=input.float, step=0.1, defval=4.4)
+changeATR= input(title="Change ATR Calculation Method ?", type=input.bool, defval=true)
+showsignals = input(title="Show Buy/Sell Signals ?", type=input.bool, defval=true)
+atr2 = sma(tr, Periods)
+atr= changeATR ? atr(Periods) : atr2
+up=srcTr-(Multiplier*atr)
+up1 = nz(up[1],up)
+up := close[1] > up1 ? max(up,up1) : up
+dn=srcTr+(Multiplier*atr)
+dn1 = nz(dn[1], dn)
+dn := close[1] < dn1 ? min(dn, dn1) : dn
+trend = 1
+trend := nz(trend[1], trend)
+trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
+upPlot = plot(trend == 1 ? up : na, title="Up Trend", style=plot.style_linebr, linewidth=1, color=color.orange)
+buySignal = trend == 1 and trend[1] == -1
+sellSignal = trend == -1 and trend[1] == 1
+dnPlot = plot(trend == 1 ? na : dn, title="Down Trend", style=plot.style_linebr, linewidth=1, color=color.orange)
+
+
+//.....ESTRATEGIA.....//
+saliendoSV= sto1 > stoNSV and sto1[1] > stoNSV and sto1[2] < stoNSV //saliendo de sobrecompra
+saliendoSC= sto1 < stoNSC and sto1[1] < stoNSC and sto1[2] > stoNSC //saliendo de sobreventa
+
+
+long= saliendoSV and sto1>sto2 and close>ema1 and close[1]>ema1 and trend==1
+tpL= close <hullma and close[1]<hullma and close[2]>hullma or sellSignal
+short= saliendoSC and sto1<sto2 and close<ema1 and close[2]<ema1 and trend==-1
+tpS= close>hullma and close[1]>hullma and close[2]<hullma or buySignal
+
+
+if (long)
+    strategy.entry("Long",  strategy.long)
+if (tpL)
+    strategy.close("Long")
+
+
+if (short)
+    strategy.entry("Short",  strategy.short)
+if (tpS)
+    strategy.close("Short")
